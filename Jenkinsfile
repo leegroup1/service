@@ -1,59 +1,44 @@
-#!groovy
-
-def handleCheckout = {
-	if (env.gitlabMergeRequestId) {
-		sh "echo 'Merge request detected. Merging...'"
-		def credentialsId = scm.userRemoteConfigs[0].credentialsId
-		checkout ([
-			$class: 'GitSCM',
-			branches: [[name: "${env.gitlabSourceNamespace}/${env.gitlabSourceBranch}"]],
-			extensions: [
-				[$class: 'PruneStaleBranch'],
-				[$class: 'CleanCheckout'],
-				[
-					$class: 'PreBuildMerge',
-					options: [
-						fastForwardMode: 'NO_FF',
-						mergeRemote: env.gitlabTargetNamespace,
-						mergeTarget: env.gitlabTargetBranch
-					]
-				]
-			],
-			userRemoteConfigs: [
-				[
-					credentialsId: credentialsId,
-					name: env.gitlabTargetNamespace,
-					url: env.gitlabTargetRepoSshURL
-				],
-				[
-					credentialsId: credentialsId,
-					name: env.gitlabSourceNamespace,
-					url: env.gitlabSourceRepoSshURL
-				]
-			]
-		])
-	} else {
-		sh "echo 'No merge request detected. Checking out current branch'"
-		checkout ([
-			$class: 'GitSCM',
-			branches: scm.branches,
-			extensions: [
-					[$class: 'PruneStaleBranch'],
-					[$class: 'CleanCheckout']
-			],
-			userRemoteConfigs: scm.userRemoteConfigs
-		])
-	}
-}
-
-node() {
-	stage('setup') {
-		sh "env | sort"
-		handleCheckout()
-		sh "git branch -vv"
-	}
-
-	stage('test') {
-		sh "echo 'Throw in some tests here'"
-	}
-}
+environment {
+ String result=’0.0.0';
+ }
+ stage(‘preparation’){
+ steps {
+ echo “Build Preparation” 
+checkout scm } }
+stage(‘Auto tagging’)
+{ 
+steps {
+ script {
+ sh “”” 
+version=\$(git describe — tags `git rev-list — tags — max-count=1`)
+#Version to get the latest tag 
+A=”\$(echo \$version|cut -d ‘.’ -f1)”
+B=”\$(echo \$version|cut -d ‘.’ -f2)”
+C=”\$(echo \$version|cut -d ‘.’ -f3)”
+ if [ \$C -gt 8 ]
+ then 
+if [ \$B -gt 8 ]
+ then
+ A=\$((A+1))
+ B=0 C=0 
+else
+B=\$((B+1))
+ C=0
+ fi
+ else
+ C=\$((C+1))
+ fi
+echo “A[\$A.\$B.\$C]”>outFile “””
+nextVersion = readFile ‘outFile’ 
+echo “we will tag ‘${nextVersion}’” 
+result =nextVersion.substring(nextVersion.indexOf(“[“)+1,nextVersion.indexOf(“]”);
+echo “we will tag ‘${result}’”
+withCredentials([usernamePassword(credentialsId: ‘github-token_jenkins’, passwordVariable: ‘password_name’, usernameVariable: ‘git_username’)]) { 
+sh “”” 
+ curl — data ‘{
+“tag_name”: “${result}”,
+ “target_commitish”: “release”,
+ “name”: “${result}”,
+ “body”: “Release of version ${result}”,
+ “draft”: false, “prerelease”: false}’ \ https://github.com/api/v3/repos/project/repo/releases?access_token=${password_name}
+}						 
