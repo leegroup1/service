@@ -1,44 +1,40 @@
-environment {
- String result=’0.0.0';
- }
- stage(‘preparation’){
- steps {
- echo “Build Preparation” 
-checkout scm } }
-stage(‘Auto tagging’)
-{ 
-steps {
- script {
- sh “”” 
-version=\$(git describe — tags `git rev-list — tags — max-count=1`)
-#Version to get the latest tag 
-A=”\$(echo \$version|cut -d ‘.’ -f1)”
-B=”\$(echo \$version|cut -d ‘.’ -f2)”
-C=”\$(echo \$version|cut -d ‘.’ -f3)”
- if [ \$C -gt 8 ]
- then 
-if [ \$B -gt 8 ]
- then
- A=\$((A+1))
- B=0 C=0 
-else
-B=\$((B+1))
- C=0
- fi
- else
- C=\$((C+1))
- fi
-echo “A[\$A.\$B.\$C]”>outFile “””
-nextVersion = readFile ‘outFile’ 
-echo “we will tag ‘${nextVersion}’” 
-result =nextVersion.substring(nextVersion.indexOf(“[“)+1,nextVersion.indexOf(“]”);
-echo “we will tag ‘${result}’”
-withCredentials([usernamePassword(credentialsId: ‘github-token_jenkins’, passwordVariable: ‘password_name’, usernameVariable: ‘git_username’)]) { 
-sh “”” 
- curl — data ‘{
-“tag_name”: “${result}”,
- “target_commitish”: “release”,
- “name”: “${result}”,
- “body”: “Release of version ${result}”,
- “draft”: false, “prerelease”: false}’ \ https://github.com/api/v3/repos/project/repo/releases?access_token=${password_name}
-}						 
+// Example usage
+node {
+    git url: 'https://github.com/leegroup1/service.git'
+    env.GIT_TAG_NAME = gitTagName()
+    env.GIT_TAG_MESSAGE = gitTagMessage()
+}
+
+/** @return The tag name, or `null` if the current commit isn't a tag. */
+String gitTagName() {
+    commit = getCommit()
+    if (commit) {
+        desc = sh(script: "git describe --tags ${commit}", returnStdout: true)?.trim()
+        if (isTag(desc)) {
+            return desc
+        }
+    }
+    return null
+}
+
+/** @return The tag message, or `null` if the current commit isn't a tag. */
+String gitTagMessage() {
+    name = gitTagName()
+    msg = sh(script: "git tag -n10000 -l ${name}", returnStdout: true)?.trim()
+    if (msg) {
+        return msg.substring(name.size()+1, msg.size())
+    }
+    return null
+}
+
+String getCommit() {
+    return sh(script: 'git rev-parse HEAD', returnStdout: true)?.trim()
+}
+
+@NonCPS
+boolean isTag(String desc) {
+    match = desc =~ /.+-[0-9]+-g[0-9A-Fa-f]{6,}$/
+    result = !match
+    match = null // prevent serialisation
+    return result
+}
