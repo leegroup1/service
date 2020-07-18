@@ -19,7 +19,10 @@ pipeline {
         }
        stage('Merge master') {
            steps{
-               sh 'git merge master'
+               sh 'git fetch --all'
+               'git checkout master'
+               'git checkout dev'
+               'git merge master'
            }
        }
     }
