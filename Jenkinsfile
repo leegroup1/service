@@ -17,5 +17,10 @@ pipeline {
                 echo 'Deploying....'
             }
         }
+        stage('Merge master') {
+            steps {
+        sh 'git merge master'
+            }
+        }
     }
 }
